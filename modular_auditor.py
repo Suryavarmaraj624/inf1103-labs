@@ -16,6 +16,8 @@ def get_valid_input():
 
     return quantity
 
+def process_delivery(current_total, new_value):
+    return current_total + new_value
 
 def main():
     total_inventory = 0
@@ -33,7 +35,7 @@ def main():
             failed_entries += 1
             continue
 
-        total_inventory += result
+        total_inventory = process_delivery(total_inventory, result)
         print(f"Accepted. Current inventory total: {total_inventory}")
 
         if total_inventory > 500:
