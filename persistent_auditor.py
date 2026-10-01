@@ -1,8 +1,5 @@
-def get_valid_input():
-    entry = input("Enter stock quantity (or 'quit' to finish): ").strip()
-
-    if entry.lower() == "quit":
-        return "quit"
+def get_valid_quantity(prompt="Enter Quantity: "):
+    entry = input(prompt).strip()
 
     if not entry.lstrip("-").isdigit() or entry in ("", "-"):
         print(f"Error: '{entry}' is not a valid number. Entry rejected.")
@@ -15,6 +12,7 @@ def get_valid_input():
         return None
 
     return quantity
+
 
 def process_delivery(current_total, new_value):
     return current_total + new_value
@@ -52,15 +50,47 @@ def get_next_order_id(orders):
 
 def main():
     orders = load_inventory()
+    failed_entries = 0
+    total_inventory = sum(quantity for _, _, quantity in orders)
 
     print("Current Orders:\n")
     for order_id, product, quantity in orders:
         print(f"{order_id}, {product}, {quantity}")
     print()
 
-    # keep the rest of main() as it was in modular_auditor.py for now —
-    # don't touch the loop yet, just verify loading works first
+    while True:
+        product = input("Enter Product Name (or 'quit' to finish): ").strip()
 
+        if product.lower() == "quit":
+            break
 
+        if product == "":
+            print("Error: Product name cannot be empty. Entry rejected.")
+            failed_entries += 1
+            continue
+
+        quantity = get_valid_quantity("Enter Quantity: ")
+
+        if quantity is None:
+            failed_entries += 1
+            continue
+
+        order_id = get_next_order_id(orders)
+        orders.append((order_id, product, quantity))
+        total_inventory = process_delivery(total_inventory, quantity)
+        tax = calculate_tax(quantity)
+
+        print("\nNew Order Added:")
+        print(f"{order_id},{product},{quantity}")
+        print(f"(Tax on this delivery: {tax:.2f})\n")
+
+        if total_inventory > 500:
+            print(f"ALERT: Overstock! Inventory ({total_inventory}) exceeds 500 units.")
+            break
+
+    # temporary: just print the final orders list to confirm it's tracking correctly
+    print("\n[DEBUG] Final orders list:", orders)
+    generate_report(total_inventory, failed_entries)
+    
 if __name__ == "__main__":
     main()
