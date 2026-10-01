@@ -47,50 +47,56 @@ def get_next_order_id(orders):
         return 1001
     return max(order_id for order_id, _, _ in orders) + 1
 
+def save_inventory(orders, filename="inventory.txt"):
+    with open(filename, "w") as f:
+        for order_id, product, quantity in orders:
+            f.write(f"{order_id},{product},{quantity}\n")
 
 def main():
     orders = load_inventory()
     failed_entries = 0
     total_inventory = sum(quantity for _, _, quantity in orders)
-
+ 
     print("Current Orders:\n")
     for order_id, product, quantity in orders:
         print(f"{order_id}, {product}, {quantity}")
     print()
-
+ 
     while True:
         product = input("Enter Product Name (or 'quit' to finish): ").strip()
-
+ 
         if product.lower() == "quit":
             break
-
+ 
         if product == "":
             print("Error: Product name cannot be empty. Entry rejected.")
             failed_entries += 1
             continue
-
+ 
         quantity = get_valid_quantity("Enter Quantity: ")
-
+ 
         if quantity is None:
             failed_entries += 1
             continue
-
+ 
         order_id = get_next_order_id(orders)
         orders.append((order_id, product, quantity))
         total_inventory = process_delivery(total_inventory, quantity)
         tax = calculate_tax(quantity)
-
+ 
         print("\nNew Order Added:")
         print(f"{order_id},{product},{quantity}")
         print(f"(Tax on this delivery: {tax:.2f})\n")
-
+ 
         if total_inventory > 500:
             print(f"ALERT: Overstock! Inventory ({total_inventory}) exceeds 500 units.")
             break
-
-    # temporary: just print the final orders list to confirm it's tracking correctly
-    print("\n[DEBUG] Final orders list:", orders)
+ 
+    save_inventory(orders)
+    print("Order successfully saved to orders.txt\n")
+ 
     generate_report(total_inventory, failed_entries)
-    
+ 
+ 
 if __name__ == "__main__":
     main()
