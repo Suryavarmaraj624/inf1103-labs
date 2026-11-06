@@ -2,8 +2,9 @@ import json
 import os
 
 from inventory import Inventory
-from product import Product
- 
+from digital_product import DigitalProduct
+from physical_product import PhysicalProduct
+
 FILENAME = "inventory.json"
  
  
@@ -41,7 +42,41 @@ def get_valid_price(prompt):
         return None
  
     return price
- 
+
+def record_to_product(record):
+    product_type = record["type"]
+
+    if product_type == "physical":
+        return PhysicalProduct(
+            record["id"], record["name"], float(record["price"]),
+            int(record["stock"]), float(record["weight"]),
+        )
+
+    if product_type == "digital":
+        return DigitalProduct(
+            record["id"], record["name"], float(record["price"]),
+            int(record["stock"]), float(record["download_size"]),
+        )
+
+    raise ValueError(f"Unknown product type: {product_type}")
+
+
+def product_to_record(product):
+    record = {
+        "id": product.get_product_id(),
+        "name": product.get_name(),
+        "price": product.get_price(),
+        "stock": product.get_stock(),
+    }
+
+    if isinstance(product, PhysicalProduct):
+        record["type"] = "physical"
+        record["weight"] = product.get_weight()
+    elif isinstance(product, DigitalProduct):
+        record["type"] = "digital"
+        record["download_size"] = product.get_download_size()
+
+    return record
  
 def load_inventory(filename=FILENAME):
     
@@ -66,9 +101,7 @@ def load_inventory(filename=FILENAME):
  
     for record in records:
         try:
-            product = Product(
-                record["id"], record["name"], float(record["price"]), int(record["stock"])
-            )
+            product = record_to_product(record)
         except (KeyError, TypeError, ValueError):
             print("Warning: skipped a malformed product record.")
             continue
@@ -82,14 +115,7 @@ def save_inventory(inventory, filename=FILENAME):
     
     records = []
     for product in inventory.get_products():
-        records.append(
-            {
-                "id": product.get_product_id(),
-                "name": product.get_name(),
-                "price": product.get_price(),
-                "stock": product.get_stock(),
-            }
-        )
+        records.append(product_to_record(product))
  
     with open(filename, "w") as f:
         json.dump(records, f, indent=4)
