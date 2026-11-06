@@ -4,6 +4,7 @@ import os
 from inventory import Inventory
 from digital_product import DigitalProduct
 from physical_product import PhysicalProduct
+from can_be_shipped import CanBeShipped
 
 FILENAME = "inventory.json"
  
@@ -26,22 +27,21 @@ def get_valid_stock(prompt):
     return stock
  
  
-def get_valid_price(prompt):
-    
+def get_valid_decimal(prompt, label):
     entry = input(prompt).strip()
- 
+
     digits = entry[1:] if entry.startswith("-") else entry
     if not digits.replace(".", "", 1).isdigit():
-        print(f"Error: '{entry}' is not a valid price. Entry rejected.")
+        print(f"Error: '{entry}' is not a valid {label}. Entry rejected.")
         return None
- 
-    price = float(entry)
- 
-    if price < 0:
-        print(f"Error: Negative price ({price}) is not allowed. Entry rejected.")
+
+    value = float(entry)
+
+    if value < 0:
+        print(f"Error: Negative {label} ({value}) is not allowed. Entry rejected.")
         return None
- 
-    return price
+
+    return value
 
 def record_to_product(record):
     product_type = record["type"]
@@ -134,27 +134,44 @@ def display_menu():
  
 def prompt_add_product(inventory):
     print("Add New Product")
+    print("1. Physical Product")
+    print("2. Digital Product")
+    product_type = input("Choose product type: ").strip()
+
+    if product_type not in ("1", "2"):
+        print("Error: Invalid product type. Entry rejected.")
+        return
+
     product_id = input("Product ID: ").strip().upper()
     name = input("Product Name: ").strip()
- 
+
     if product_id == "" or name == "":
         print("Error: Product ID and Name cannot be empty. Entry rejected.")
         return
- 
-    price = get_valid_price("Price: ")
+
+    price = get_valid_decimal("Price: ", "price")
     if price is None:
         return
- 
+
     stock = get_valid_stock("Stock Quantity: ")
     if stock is None:
         return
- 
-    product = Product(product_id, name, price, stock)
+
+    if product_type == "1":
+        weight = get_valid_decimal("Weight (kg): ", "weight")
+        if weight is None:
+            return
+        product = PhysicalProduct(product_id, name, price, stock, weight)
+    else:
+        download_size = get_valid_decimal("Download Size (MB): ", "download size")
+        if download_size is None:
+            return
+        product = DigitalProduct(product_id, name, price, stock, download_size)
+
     if inventory.add_product(product):
         print("Product added successfully!")
     else:
         print(f"Error: Product ID '{product_id}' already exists. Entry rejected.")
- 
  
 def prompt_update_stock(inventory):
     print("Update Stock")
@@ -188,10 +205,10 @@ def prompt_search_product(inventory):
  
     print("Product Found")
     print("-" * 48)
-    print(f"ID: {product.get_product_id()}")
-    print(f"Name: {product.get_name()}")
-    print(f"Price: ${product.get_price():.2f}")
-    print(f"Stock: {product.get_stock()}")
+    product.display_information()
+    print(f"Fulfilment: {product.get_fulfilment_info()}")
+    if isinstance(product, CanBeShipped):
+        print(f"Shipping Cost: ${product.calculate_shipping_cost():.2f}")
     print("-" * 48)
  
  
