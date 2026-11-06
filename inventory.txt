@@ -1,0 +1,4 @@
+1001,pencil,200
+1002,pen,150
+1003,calculator,20
+1004,eraser,56

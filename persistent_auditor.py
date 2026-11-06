@@ -93,7 +93,7 @@ def main():
             break
  
     save_inventory(orders)
-    print("Order successfully saved to orders.txt\n")
+    print("Order successfully saved to inventory.txt\n")
  
     generate_report(total_inventory, failed_entries)
  
