@@ -30,5 +30,21 @@
         "stock": 250,
         "type": "digital",
         "download_size": 120.0
+    },
+    {
+        "id": "P003",
+        "name": "keyboard",
+        "price": 150.0,
+        "stock": 67,
+        "type": "physical",
+        "weight": 3.7
+    },
+    {
+        "id": "D003",
+        "name": "video editor",
+        "price": 85.7,
+        "stock": 100,
+        "type": "digital",
+        "download_size": 680.0
     }
 ]
