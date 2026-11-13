@@ -1,33 +1,35 @@
 import json
 import os
 
-from inventory import Inventory
-from digital_product import DigitalProduct
-from physical_product import PhysicalProduct
 from can_be_shipped import CanBeShipped
+from digital_product import DigitalProduct
+from inventory import Inventory
+from order import Order
+from physical_product import PhysicalProduct
+from product import Product
+from supplier import Supplier
 
 FILENAME = "inventory.json"
- 
- 
-def get_valid_stock(prompt):
-   
+
+
+def get_valid_stock(prompt: str) -> int | None:
     entry = input(prompt).strip()
- 
+
     digits = entry[1:] if entry.startswith("-") else entry
     if not digits.isdigit():
         print(f"Error: '{entry}' is not a valid number. Entry rejected.")
         return None
- 
+
     stock = int(entry)
- 
+
     if stock < 0:
         print(f"Error: Negative quantity ({stock}) is not allowed. Entry rejected.")
         return None
- 
+
     return stock
- 
- 
-def get_valid_decimal(prompt, label):
+
+
+def get_valid_decimal(prompt: str, label: str) -> float | None:
     entry = input(prompt).strip()
 
     digits = entry[1:] if entry.startswith("-") else entry
@@ -43,30 +45,53 @@ def get_valid_decimal(prompt, label):
 
     return value
 
-def record_to_product(record):
+
+def record_to_supplier(record: dict) -> Supplier:
+    return Supplier(record["id"], record["name"], record["email"])
+
+
+def record_to_product(record: dict, suppliers: dict[str, Supplier]) -> Product:
+    supplier = suppliers[record["supplier_id"]]
     product_type = record["type"]
 
     if product_type == "physical":
         return PhysicalProduct(
-            record["id"], record["name"], float(record["price"]),
-            int(record["stock"]), float(record["weight"]),
+            record["id"],
+            record["name"],
+            float(record["price"]),
+            int(record["stock"]),
+            supplier,
+            float(record["weight"]),
         )
 
     if product_type == "digital":
         return DigitalProduct(
-            record["id"], record["name"], float(record["price"]),
-            int(record["stock"]), float(record["download_size"]),
+            record["id"],
+            record["name"],
+            float(record["price"]),
+            int(record["stock"]),
+            supplier,
+            float(record["download_size"]),
         )
 
     raise ValueError(f"Unknown product type: {product_type}")
 
 
-def product_to_record(product):
+def supplier_to_record(supplier: Supplier) -> dict:
+    return {
+        "id": supplier.get_supplier_id(),
+        "name": supplier.get_name(),
+        "email": supplier.get_contact_email(),
+    }
+
+
+def product_to_record(product: Product) -> dict:
     record = {
         "id": product.get_product_id(),
         "name": product.get_name(),
         "price": product.get_price(),
         "stock": product.get_stock(),
+        "supplier_id": product.get_supplier().get_supplier_id(),
     }
 
     if isinstance(product, PhysicalProduct):
@@ -77,63 +102,106 @@ def product_to_record(product):
         record["download_size"] = product.get_download_size()
 
     return record
- 
-def load_inventory(filename=FILENAME):
-    
+
+
+def load_inventory(filename: str = FILENAME) -> tuple[Inventory, dict[str, Supplier]]:
     inventory = Inventory()
- 
+    suppliers: dict[str, Supplier] = {}
+
     if not os.path.exists(filename):
         print(f"{filename} not found. Starting with an empty inventory.")
-        return inventory
- 
+        return inventory, suppliers
+
     print(f"{filename} found.")
- 
+
     try:
         with open(filename, "r") as f:
-            records = json.load(f)
+            data = json.load(f)
     except json.JSONDecodeError:
         print(f"Warning: {filename} is not valid JSON. Starting with an empty inventory.")
-        return inventory
- 
-    if not isinstance(records, list):
+        return inventory, suppliers
+
+    if (
+        not isinstance(data, dict)
+        or not isinstance(data.get("suppliers"), list)
+        or not isinstance(data.get("products"), list)
+    ):
         print(f"Warning: {filename} has an unexpected format. Starting with an empty inventory.")
-        return inventory
- 
-    for record in records:
+        return inventory, suppliers
+
+    for record in data["suppliers"]:
         try:
-            product = record_to_product(record)
+            supplier = record_to_supplier(record)
+        except (KeyError, TypeError):
+            print("Warning: skipped a malformed supplier record.")
+            continue
+        suppliers[supplier.get_supplier_id()] = supplier
+
+    for record in data["products"]:
+        try:
+            product = record_to_product(record, suppliers)
         except (KeyError, TypeError, ValueError):
             print("Warning: skipped a malformed product record.")
             continue
         inventory.add_product(product)
- 
+
     print("Inventory loaded successfully.")
-    return inventory
- 
- 
-def save_inventory(inventory, filename=FILENAME):
-    
-    records = []
-    for product in inventory.get_products():
-        records.append(product_to_record(product))
- 
+    return inventory, suppliers
+
+
+def save_inventory(inventory: Inventory, suppliers: dict[str, Supplier],
+                   filename: str = FILENAME) -> None:
+    data = {
+        "suppliers": [supplier_to_record(s) for s in suppliers.values()],
+        "products": [product_to_record(p) for p in inventory.get_products()],
+    }
+
     with open(filename, "w") as f:
-        json.dump(records, f, indent=4)
- 
- 
-def display_menu():
+        json.dump(data, f, indent=4)
+
+
+def display_menu() -> None:
     print("----------- MENU -----------")
     print("1. Display All Products")
     print("2. Add Product")
     print("3. Update Stock")
     print("4. Search Product")
-    print("5. Save Inventory")
-    print("6. Exit")
+    print("5. Add Supplier")
+    print("6. Create Order")
+    print("7. Save Inventory")
+    print("8. Exit")
     print("----------------------------")
- 
- 
-def prompt_add_product(inventory):
+
+
+def prompt_add_supplier(suppliers: dict[str, Supplier]) -> None:
+    print("Add New Supplier")
+    supplier_id = input("Supplier ID: ").strip().upper()
+    name = input("Supplier Name: ").strip()
+    email = input("Contact Email: ").strip()
+
+    if supplier_id == "" or name == "" or email == "":
+        print("Error: Supplier ID, Name and Email cannot be empty. Entry rejected.")
+        return
+
+    if "@" not in email:
+        print(f"Error: '{email}' is not a valid email address. Entry rejected.")
+        return
+
+    if supplier_id in suppliers:
+        print(f"Error: Supplier ID '{supplier_id}' already exists. Entry rejected.")
+        return
+
+    suppliers[supplier_id] = Supplier(supplier_id, name, email)
+    print("Supplier added successfully!")
+
+
+def prompt_add_product(inventory: Inventory, suppliers: dict[str, Supplier]) -> None:
     print("Add New Product")
+
+    if not suppliers:
+        print("Error: No suppliers exist yet. Add a supplier first (option 5).")
+        return
+
     print("1. Physical Product")
     print("2. Digital Product")
     product_type = input("Choose product type: ").strip()
@@ -157,52 +225,64 @@ def prompt_add_product(inventory):
     if stock is None:
         return
 
+    print("Available Suppliers:")
+    for supplier in suppliers.values():
+        supplier.display_information()
+
+    supplier_id = input("Supplier ID: ").strip().upper()
+    if supplier_id not in suppliers:
+        print(f"Error: Supplier '{supplier_id}' not found. Entry rejected.")
+        return
+    supplier = suppliers[supplier_id]
+
+    product: Product
     if product_type == "1":
         weight = get_valid_decimal("Weight (kg): ", "weight")
         if weight is None:
             return
-        product = PhysicalProduct(product_id, name, price, stock, weight)
+        product = PhysicalProduct(product_id, name, price, stock, supplier, weight)
     else:
         download_size = get_valid_decimal("Download Size (MB): ", "download size")
         if download_size is None:
             return
-        product = DigitalProduct(product_id, name, price, stock, download_size)
+        product = DigitalProduct(product_id, name, price, stock, supplier, download_size)
 
     if inventory.add_product(product):
         print("Product added successfully!")
     else:
         print(f"Error: Product ID '{product_id}' already exists. Entry rejected.")
- 
-def prompt_update_stock(inventory):
+
+
+def prompt_update_stock(inventory: Inventory) -> None:
     print("Update Stock")
     product_id = input("Enter Product ID: ").strip().upper()
- 
-    product = inventory.search_product(product_id)
+
+    product = inventory.find_product(product_id)
     if product is None:
         print("Product not found.")
         return
- 
+
     print("Product Found:")
     print(f"Name: {product.get_name()}")
     print(f"Current Stock: {product.get_stock()}")
- 
+
     new_stock = get_valid_stock("New Stock Quantity: ")
     if new_stock is None:
         return
- 
+
     inventory.update_stock(product_id, new_stock)
     print("Stock updated successfully!")
- 
- 
-def prompt_search_product(inventory):
+
+
+def prompt_search_product(inventory: Inventory) -> None:
     print("Search Product")
     product_id = input("Enter Product ID: ").strip().upper()
- 
-    product = inventory.search_product(product_id)
+
+    product = inventory.find_product(product_id)
     if product is None:
         print("Product not found.")
         return
- 
+
     print("Product Found")
     print("-" * 48)
     product.display_information()
@@ -210,41 +290,79 @@ def prompt_search_product(inventory):
     if isinstance(product, CanBeShipped):
         print(f"Shipping Cost: ${product.calculate_shipping_cost():.2f}")
     print("-" * 48)
- 
- 
-def main():
+
+
+def prompt_create_order(inventory: Inventory) -> None:
+    print("Create Order")
+    order_id = input("Order ID: ").strip().upper()
+
+    if order_id == "":
+        print("Error: Order ID cannot be empty. Entry rejected.")
+        return
+
+    order = Order(order_id)
+
+    while True:
+        product_id = input("Product ID to add (or 'done' to finish): ").strip().upper()
+
+        if product_id == "DONE":
+            break
+
+        product = inventory.find_product(product_id)
+        if product is None:
+            print("Product not found.")
+            continue
+
+        quantity = get_valid_stock("Quantity: ")
+        if quantity is None:
+            continue
+
+        if order.add_order_line(product, quantity):
+            print(f"Added {quantity} x {product.get_name()} to the order.")
+        else:
+            print("Error: Quantity must be at least 1. Entry rejected.")
+
+    print()
+    order.display_order()
+
+
+def main() -> None:
     print("=" * 40)
     print("INVENTORY MANAGEMENT SYSTEM")
     print("=" * 40)
- 
-    inventory = load_inventory()
- 
+
+    inventory, suppliers = load_inventory()
+
     display_menu()
- 
+
     while True:
         option = input("Enter option: ").strip()
- 
+
         if option == "1":
             inventory.display_all()
         elif option == "2":
-            prompt_add_product(inventory)
+            prompt_add_product(inventory, suppliers)
         elif option == "3":
             prompt_update_stock(inventory)
         elif option == "4":
             prompt_search_product(inventory)
         elif option == "5":
-            print("Saving inventory...")
-            save_inventory(inventory)
-            print(f"Inventory saved successfully to {FILENAME}.")
+            prompt_add_supplier(suppliers)
         elif option == "6":
+            prompt_create_order(inventory)
+        elif option == "7":
+            print("Saving inventory...")
+            save_inventory(inventory, suppliers)
+            print(f"Inventory saved successfully to {FILENAME}.")
+        elif option == "8":
             print("Saving inventory before exit...")
-            save_inventory(inventory)
+            save_inventory(inventory, suppliers)
             print("Inventory saved successfully.")
             print("Thank you for using Inventory Management System.")
             print("Program terminated.")
             break
         else:
-            print("Invalid option. Please enter a number from 1 to 6.")
+            print("Invalid option. Please enter a number from 1 to 8.")
 
 
 if __name__ == "__main__":
