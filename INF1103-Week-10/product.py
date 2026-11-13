@@ -1,12 +1,18 @@
 from abc import ABC, abstractmethod
+from supplier import Supplier
 
 class Product(ABC):
 
-    def __init__(self, product_id, name, price, stock):
-        self.__product_id = product_id
-        self.__name = name
-        self.__price = price
-        self.__stock = stock
+    def __init__(self, product_id: str, name: str, price: float, stock: int,
+                 supplier: Supplier) -> None:
+        self.__product_id: str = product_id
+        self.__name: str = name
+        self.__price: float = price
+        self.__stock: int = stock
+        self.__supplier: Supplier = supplier
+
+    def get_supplier(self) -> Supplier:
+        return self.__supplier
 
     def get_product_id(self):
         return self.__product_id
@@ -32,6 +38,11 @@ class Product(ABC):
         print(
             f"ID: {self.__product_id} | Name: {self.__name} | "
             f"Price: ${self.__price:.2f} | Stock: {self.__stock}"
+        )
+
+        print(
+            f"    Supplier: {self.__supplier.get_name()} "
+            f"({self.__supplier.get_supplier_id()})"
         )
 
     @abstractmethod
