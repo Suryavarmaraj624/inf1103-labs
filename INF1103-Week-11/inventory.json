@@ -61,6 +61,15 @@
             "supplier_id": "S001",
             "type": "physical",
             "weight": 1.06
+        },
+        {
+            "id": "P004",
+            "name": "mousepad",
+            "price": 10.0,
+            "stock": 20,
+            "supplier_id": "S003",
+            "type": "physical",
+            "weight": 1.0
         }
     ]
 }

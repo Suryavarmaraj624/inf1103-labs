@@ -8,6 +8,7 @@ from order import Order
 from physical_product import PhysicalProduct
 from product import Product
 from supplier import Supplier
+from product_factory import ProductFactory
 
 FILENAME = "inventory.json"
 
@@ -52,30 +53,18 @@ def record_to_supplier(record: dict) -> Supplier:
 
 def record_to_product(record: dict, suppliers: dict[str, Supplier]) -> Product:
     supplier = suppliers[record["supplier_id"]]
-    product_type = record["type"]
 
-    if product_type == "physical":
-        return PhysicalProduct(
-            record["id"],
-            record["name"],
-            float(record["price"]),
-            int(record["stock"]),
-            supplier,
-            float(record["weight"]),
-        )
-
-    if product_type == "digital":
-        return DigitalProduct(
-            record["id"],
-            record["name"],
-            float(record["price"]),
-            int(record["stock"]),
-            supplier,
-            float(record["download_size"]),
-        )
-
-    raise ValueError(f"Unknown product type: {product_type}")
-
+    # Creation goes through the factory: main.py no longer decides which class
+    return ProductFactory.create(
+        record["type"],
+        record["id"],
+        record["name"],
+        float(record["price"]),
+        int(record["stock"]),
+        supplier,
+        weight=float(record.get("weight", 0.0)),
+        download_size=float(record.get("download_size", 0.0)),
+    )
 
 def supplier_to_record(supplier: Supplier) -> dict:
     return {
@@ -235,17 +224,28 @@ def prompt_add_product(inventory: Inventory, suppliers: dict[str, Supplier]) -> 
         return
     supplier = suppliers[supplier_id]
 
-    product: Product
+    weight = 0.0
+    download_size = 0.0
     if product_type == "1":
-        weight = get_valid_decimal("Weight (kg): ", "weight")
-        if weight is None:
+        kind = "physical"
+        entered = get_valid_decimal("Weight (kg): ", "weight")
+        if entered is None:
             return
-        product = PhysicalProduct(product_id, name, price, stock, supplier, weight)
+        weight = entered
     else:
-        download_size = get_valid_decimal("Download Size (MB): ", "download size")
-        if download_size is None:
+        kind = "digital"
+        entered = get_valid_decimal("Download Size (MB): ", "download size")
+        if entered is None:
             return
-        product = DigitalProduct(product_id, name, price, stock, supplier, download_size)
+        download_size = entered
+
+    try:
+        product = ProductFactory.create(kind, product_id, name, price, stock,
+                                        supplier, weight=weight,
+                                        download_size=download_size)
+    except ValueError as error:
+        print(f"Error: {error} Entry rejected.")
+        return
 
     if inventory.add_product(product):
         print("Product added successfully!")
