@@ -1,21 +1,26 @@
 import json
 
-
 from can_be_shipped import CanBeShipped
 from digital_product import DigitalProduct
+from discount_strategy import (BulkDiscount, DiscountStrategy, NoDiscount,
+                               PercentageDiscount, StudentDiscount)
 from inventory import Inventory
 from order import Order
 from physical_product import PhysicalProduct
 from product import Product
-from supplier import Supplier
 from product_factory import ProductFactory
-from discount_strategy import (BulkDiscount, DiscountStrategy, NoDiscount,
-                               PercentageDiscount, StudentDiscount)
+from product_loader import load_products
+from supplier import Supplier
 
 FILENAME = "inventory.json"
 
 
 def get_valid_stock(prompt: str) -> int:
+    """
+    Keeps asking until the user enters a whole number that is 0 or more.
+    int() raises ValueError for text such as "abc" or "2.5", so that is caught
+    and the user is asked again (we never continue with incomplete data).
+    """
     while True:
         try:
             value = int(input(prompt))
@@ -28,6 +33,10 @@ def get_valid_stock(prompt: str) -> int:
 
 
 def get_positive_float(prompt: str) -> float:
+    """
+    Keeps asking until the user enters a number greater than zero (e.g. a price).
+    float() raises ValueError for text such as "abc": caught, ask again.
+    """
     while True:
         try:
             value = float(input(prompt))
@@ -40,6 +49,10 @@ def get_positive_float(prompt: str) -> float:
 
 
 def get_valid_decimal(prompt: str, label: str) -> float:
+    """
+    Keeps asking until the user enters a number that is 0 or more
+    (weight, download size...). label is used in the messages.
+    """
     while True:
         try:
             value = float(input(prompt))
@@ -52,10 +65,23 @@ def get_valid_decimal(prompt: str, label: str) -> float:
 
 
 def record_to_supplier(record: dict) -> Supplier:
+    """
+    Builds a Supplier from one saved record.
+    Raises: KeyError if a field is missing
+    """
     return Supplier(record["id"], record["name"], record["email"])
 
 
 def record_to_product(record: dict, suppliers: dict[str, Supplier]) -> Product:
+    """
+    Builds the correct Product subclass from one saved record, linking it to
+    the existing Supplier object named by the record's "supplier_id".
+    Input:  record (dict), suppliers (dict of supplier_id -> Supplier)
+    Output: a Product created by ProductFactory
+    Raises: KeyError / TypeError / ValueError if the record is malformed,
+            refers to a supplier that does not exist, has an unknown type,
+            or breaks a Product validation rule
+    """
     supplier = suppliers[record["supplier_id"]]
 
     # Creation goes through the factory: main.py no longer decides which class
@@ -70,6 +96,7 @@ def record_to_product(record: dict, suppliers: dict[str, Supplier]) -> Product:
         download_size=float(record.get("download_size", 0.0)),
     )
 
+
 def supplier_to_record(supplier: Supplier) -> dict:
     return {
         "id": supplier.get_supplier_id(),
@@ -79,6 +106,11 @@ def supplier_to_record(supplier: Supplier) -> dict:
 
 
 def product_to_record(product: Product) -> dict:
+    """
+    Turns a Product object into a dictionary that can be saved as JSON.
+    The supplier is saved as just its ID: suppliers are stored once, in their
+    own list, so every product from the same supplier shares one Supplier.
+    """
     record = {
         "id": product.get_product_id(),
         "name": product.get_name(),
@@ -98,6 +130,13 @@ def product_to_record(product: Product) -> dict:
 
 
 def load_inventory(filename: str = FILENAME) -> tuple[Inventory, dict[str, Supplier]]:
+    """
+    Loads suppliers and products from a JSON file.
+    Suppliers are loaded first so products can be linked to them.
+    Input:  filename (str)
+    Output: (Inventory, suppliers dict). Both are empty if the file is
+            missing or unreadable.
+    """
     inventory = Inventory()
     suppliers: dict[str, Supplier] = {}
 
@@ -141,6 +180,12 @@ def load_inventory(filename: str = FILENAME) -> tuple[Inventory, dict[str, Suppl
 
 def save_inventory(inventory: Inventory, suppliers: dict[str, Supplier],
                    filename: str = FILENAME) -> bool:
+    """
+    Saves every supplier and every product to a JSON file.
+    Input:  inventory (Inventory), suppliers (dict), filename (str)
+    Output: True if saved, False if the file could not be written
+            (e.g. it is open in another program, or the folder is read-only)
+    """
     data = {
         "suppliers": [supplier_to_record(s) for s in suppliers.values()],
         "products": [product_to_record(p) for p in inventory.get_products()],
@@ -164,7 +209,8 @@ def display_menu() -> None:
     print("5. Add Supplier")
     print("6. Create Order")
     print("7. Save Inventory")
-    print("8. Exit")
+    print("8. Load Products from CSV")
+    print("9. Exit")
     print("----------------------------")
 
 
@@ -270,6 +316,7 @@ def prompt_update_stock(inventory: Inventory) -> None:
         return
     print("Stock updated successfully!")
 
+
 def prompt_search_product(inventory: Inventory) -> None:
     print("Search Product")
     product_id = input("Enter Product ID: ").strip().upper()
@@ -289,6 +336,11 @@ def prompt_search_product(inventory: Inventory) -> None:
 
 
 def choose_discount() -> DiscountStrategy:
+    """
+    Asks the user which discount to apply and returns that strategy object.
+    The choice between strategies happens here, at the user-interface edge.
+    Order itself contains no discount if/elif: it just calls apply().
+    """
     print("Discounts:")
     print("1. No discount")
     print("2. Percentage discount")
@@ -351,6 +403,27 @@ def prompt_create_order(inventory: Inventory) -> None:
     order.display_order()
 
 
+def prompt_load_csv(inventory: Inventory, suppliers: dict[str, Supplier]) -> None:
+    print("Load Products from CSV")
+
+    if not suppliers:
+        print("Error: No suppliers exist yet. Add a supplier first (option 5).")
+        return
+
+    path = input("CSV file name [products.csv]: ").strip() or "products.csv"
+
+    print("Available Suppliers:")
+    for supplier in suppliers.values():
+        supplier.display_information()
+
+    supplier_id = input("Supplier ID for these products: ").strip().upper()
+    if supplier_id not in suppliers:
+        print(f"Error: Supplier '{supplier_id}' not found. Entry rejected.")
+        return
+
+    load_products(path, inventory, suppliers[supplier_id])
+
+
 def main() -> None:
     print("=" * 40)
     print("INVENTORY MANAGEMENT SYSTEM")
@@ -380,6 +453,8 @@ def main() -> None:
             if save_inventory(inventory, suppliers):
                 print(f"Inventory saved successfully to {FILENAME}.")
         elif option == "8":
+            prompt_load_csv(inventory, suppliers)
+        elif option == "9":
             print("Saving inventory before exit...")
             if save_inventory(inventory, suppliers):
                 print("Inventory saved successfully.")
@@ -387,7 +462,7 @@ def main() -> None:
             print("Program terminated.")
             break
         else:
-            print("Invalid option. Please enter a number from 1 to 8.")
+            print("Invalid option. Please enter a number from 1 to 9.")
 
 
 if __name__ == "__main__":
