@@ -36,7 +36,7 @@ class Order:
         return list(self.__order_lines)
 
     def calculate_subtotal(self) -> float:
-        return sum(line.calculate_subtotal() for line in self.__order_lines)
+        return sum((line.calculate_subtotal() for line in self.__order_lines), 0.0)
 
     def calculate_total(self) -> float:
         return self.__discount.apply(self.calculate_subtotal())
