@@ -48,7 +48,7 @@
             "id": "D002",
             "name": "Antivirus",
             "price": 39.9,
-            "stock": 265,
+            "stock": 230,
             "supplier_id": "S002",
             "type": "digital",
             "download_size": 120.0
