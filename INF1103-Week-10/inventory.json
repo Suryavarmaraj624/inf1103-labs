@@ -30,7 +30,7 @@
             "id": "P002",
             "name": "Mouse",
             "price": 25.5,
-            "stock": 40,
+            "stock": 67,
             "supplier_id": "S001",
             "type": "physical",
             "weight": 0.1
