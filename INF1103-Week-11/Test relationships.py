@@ -65,8 +65,8 @@ def test_aggregation() -> None:
     print("Inventory A find_product('P002'):", inventory_a.find_product("P002"))
     print("The mouse object still works:")
     mouse.display_information()
-    print("update_stock(55) on the removed product:", mouse.update_stock(55),
-          "-> stock is now", mouse.get_stock())
+    mouse.update_stock(55)
+    print("update_stock(55) on the removed product -> stock is now", mouse.get_stock())
 
     inventory_b.add_product(mouse)
     print("\nSame object added to Inventory B:",
@@ -157,13 +157,17 @@ def test_lsp() -> None:
 
     print("\nThe expectation Product sets for update_stock():")
     print("  valid quantity accepted  -> the stock changes")
-    print("  invalid quantity rejected -> returns False, stock unchanged")
+    print("  invalid quantity rejected -> raises ValueError, stock unchanged (Lab 9)")
     for product in (laptop, editor):
         before = product.get_stock()
-        accepted = product.update_stock(before + 5)
-        rejected = product.update_stock(-1)
-        print(f"  {product.get_name()}: update_stock({before + 5}) -> {accepted}, "
-              f"update_stock(-1) -> {rejected}, stock now {product.get_stock()}")
+        product.update_stock(before + 5)
+        try:
+            product.update_stock(-1)
+            outcome = "accepted (wrong!)"
+        except ValueError as error:
+            outcome = f"ValueError: {error}"
+        print(f"  {product.get_name()}: update_stock({before + 5}) ok, "
+              f"update_stock(-1) -> {outcome}, stock now {product.get_stock()}")
 
 
 # ---------------------------------------------------------------- Section 7
@@ -195,9 +199,23 @@ def test_edge_cases() -> None:
     print("Find unknown ID:", inventory.find_product("P999"))
     print("Remove unknown ID:", inventory.remove_product("P999"))
     print("Update unknown ID:", inventory.update_stock("P999", 5))
-    print("Rejected stock update:", laptop.update_stock(-5), "-> stock still", laptop.get_stock())
-    print("Order quantity 0:", order.add_order_line(laptop, 0))
-    print("Order quantity -3:", order.add_order_line(laptop, -3))
+    try:
+        laptop.update_stock(-5)
+        print("Rejected stock update: accepted (wrong!)")
+    except ValueError as error:
+        print("Rejected stock update: ValueError:", error, "-> stock still", laptop.get_stock())
+    try:
+        order.add_order_line(laptop, 0)
+        print("Order quantity 0: accepted (wrong!)")
+    except ValueError as error:
+        print("Order quantity 0: ValueError:", error,
+              "-> lines in order:", len(order.get_order_lines()))
+    try:
+        order.add_order_line(laptop, -3)
+        print("Order quantity -3: accepted (wrong!)")
+    except ValueError as error:
+        print("Order quantity -3: ValueError:", error,
+              "-> lines in order:", len(order.get_order_lines()))
     print("Remove unknown line:", order.remove_order_line("P999"))
     print("Empty order total:", order.calculate_total())
 

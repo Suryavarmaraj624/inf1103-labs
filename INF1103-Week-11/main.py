@@ -317,10 +317,13 @@ def prompt_create_order(inventory: Inventory) -> None:
         if quantity is None:
             continue
 
-        if order.add_order_line(product, quantity):
-            print(f"Added {quantity} x {product.get_name()} to the order.")
-        else:
-            print("Error: Quantity must be at least 1. Entry rejected.")
+        try:
+            order.add_order_line(product, quantity)
+        except ValueError as error:
+            print(f"Error: {error} Line not added.")
+            continue
+
+        print(f"Added {quantity} x {product.get_name()} to the order.")
 
     print()
     order.display_order()

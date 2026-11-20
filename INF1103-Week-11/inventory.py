@@ -32,7 +32,8 @@ class Inventory:
         if product is None:
             return False
 
-        return product.update_stock(new_stock)
+        product.update_stock(new_stock)
+        return True
 
     def display_all(self) -> None:
         print("Current Inventory")

@@ -21,14 +21,9 @@ class Order:
     def set_discount(self, discount: DiscountStrategy) -> None:
         self.__discount = discount
 
-    def add_order_line(self, product: Product, quantity: int) -> bool:
-        
-        if not isinstance(quantity, int) or quantity < 1:
-            return False
-
+    def add_order_line(self, product: Product, quantity: int) -> None:
         order_line = OrderLine(product, quantity)
         self.__order_lines.append(order_line)
-        return True
 
     def remove_order_line(self, product_id: str) -> bool:
         for order_line in self.__order_lines:
