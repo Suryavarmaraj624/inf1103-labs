@@ -1,5 +1,5 @@
 import json
-import os
+
 
 from can_be_shipped import CanBeShipped
 from digital_product import DigitalProduct
@@ -9,42 +9,46 @@ from physical_product import PhysicalProduct
 from product import Product
 from supplier import Supplier
 from product_factory import ProductFactory
+from discount_strategy import (BulkDiscount, DiscountStrategy, NoDiscount,
+                               PercentageDiscount, StudentDiscount)
 
 FILENAME = "inventory.json"
 
 
-def get_valid_stock(prompt: str) -> int | None:
-    entry = input(prompt).strip()
-
-    digits = entry[1:] if entry.startswith("-") else entry
-    if not digits.isdigit():
-        print(f"Error: '{entry}' is not a valid number. Entry rejected.")
-        return None
-
-    stock = int(entry)
-
-    if stock < 0:
-        print(f"Error: Negative quantity ({stock}) is not allowed. Entry rejected.")
-        return None
-
-    return stock
+def get_valid_stock(prompt: str) -> int:
+    while True:
+        try:
+            value = int(input(prompt))
+            if value < 0:
+                print("Please enter a number that is 0 or more.")
+                continue
+            return value
+        except ValueError:
+            print("Please enter a whole number, e.g. 5")
 
 
-def get_valid_decimal(prompt: str, label: str) -> float | None:
-    entry = input(prompt).strip()
+def get_positive_float(prompt: str) -> float:
+    while True:
+        try:
+            value = float(input(prompt))
+            if value <= 0:
+                print("Please enter a number greater than zero.")
+                continue
+            return value
+        except ValueError:
+            print("Please enter a valid number, e.g. 12.50")
 
-    digits = entry[1:] if entry.startswith("-") else entry
-    if not digits.replace(".", "", 1).isdigit():
-        print(f"Error: '{entry}' is not a valid {label}. Entry rejected.")
-        return None
 
-    value = float(entry)
-
-    if value < 0:
-        print(f"Error: Negative {label} ({value}) is not allowed. Entry rejected.")
-        return None
-
-    return value
+def get_valid_decimal(prompt: str, label: str) -> float:
+    while True:
+        try:
+            value = float(input(prompt))
+            if value < 0:
+                print(f"The {label} cannot be negative.")
+                continue
+            return value
+        except ValueError:
+            print(f"Please enter a valid {label}, e.g. 1.5")
 
 
 def record_to_supplier(record: dict) -> Supplier:
@@ -97,15 +101,12 @@ def load_inventory(filename: str = FILENAME) -> tuple[Inventory, dict[str, Suppl
     inventory = Inventory()
     suppliers: dict[str, Supplier] = {}
 
-    if not os.path.exists(filename):
-        print(f"{filename} not found. Starting with an empty inventory.")
-        return inventory, suppliers
-
-    print(f"{filename} found.")
-
     try:
         with open(filename, "r") as f:
             data = json.load(f)
+    except FileNotFoundError:
+        print(f"{filename} not found. Starting with an empty inventory.")
+        return inventory, suppliers
     except json.JSONDecodeError:
         print(f"Warning: {filename} is not valid JSON. Starting with an empty inventory.")
         return inventory, suppliers
@@ -139,14 +140,19 @@ def load_inventory(filename: str = FILENAME) -> tuple[Inventory, dict[str, Suppl
 
 
 def save_inventory(inventory: Inventory, suppliers: dict[str, Supplier],
-                   filename: str = FILENAME) -> None:
+                   filename: str = FILENAME) -> bool:
     data = {
         "suppliers": [supplier_to_record(s) for s in suppliers.values()],
         "products": [product_to_record(p) for p in inventory.get_products()],
     }
 
-    with open(filename, "w") as f:
-        json.dump(data, f, indent=4)
+    try:
+        with open(filename, "w") as f:
+            json.dump(data, f, indent=4)
+    except OSError as error:  # PermissionError is a kind of OSError
+        print(f"Error: could not save to {filename} ({error}).")
+        return False
+    return True
 
 
 def display_menu() -> None:
@@ -206,13 +212,8 @@ def prompt_add_product(inventory: Inventory, suppliers: dict[str, Supplier]) -> 
         print("Error: Product ID and Name cannot be empty. Entry rejected.")
         return
 
-    price = get_valid_decimal("Price: ", "price")
-    if price is None:
-        return
-
+    price = get_positive_float("Price: ")
     stock = get_valid_stock("Stock Quantity: ")
-    if stock is None:
-        return
 
     print("Available Suppliers:")
     for supplier in suppliers.values():
@@ -228,16 +229,10 @@ def prompt_add_product(inventory: Inventory, suppliers: dict[str, Supplier]) -> 
     download_size = 0.0
     if product_type == "1":
         kind = "physical"
-        entered = get_valid_decimal("Weight (kg): ", "weight")
-        if entered is None:
-            return
-        weight = entered
+        weight = get_valid_decimal("Weight (kg): ", "weight")
     else:
         kind = "digital"
-        entered = get_valid_decimal("Download Size (MB): ", "download size")
-        if entered is None:
-            return
-        download_size = entered
+        download_size = get_valid_decimal("Download Size (MB): ", "download size")
 
     try:
         product = ProductFactory.create(kind, product_id, name, price, stock,
@@ -267,12 +262,13 @@ def prompt_update_stock(inventory: Inventory) -> None:
     print(f"Current Stock: {product.get_stock()}")
 
     new_stock = get_valid_stock("New Stock Quantity: ")
-    if new_stock is None:
+
+    try:
+        inventory.update_stock(product_id, new_stock)
+    except ValueError as error:
+        print(f"Error: {error} Stock not changed.")
         return
-
-    inventory.update_stock(product_id, new_stock)
     print("Stock updated successfully!")
-
 
 def prompt_search_product(inventory: Inventory) -> None:
     print("Search Product")
@@ -292,6 +288,31 @@ def prompt_search_product(inventory: Inventory) -> None:
     print("-" * 48)
 
 
+def choose_discount() -> DiscountStrategy:
+    print("Discounts:")
+    print("1. No discount")
+    print("2. Percentage discount")
+    print("3. Bulk discount ($20 off orders of $200 or more)")
+    print("4. Student discount (5% off)")
+
+    while True:
+        choice = input("Choose discount: ").strip()
+        if choice == "1":
+            return NoDiscount()
+        elif choice == "2":
+            while True:
+                percent = get_positive_float("Percentage off (e.g. 10): ")
+                try:
+                    return PercentageDiscount(percent)
+                except ValueError as error:
+                    print(error)
+        elif choice == "3":
+            return BulkDiscount(200, 20)
+        elif choice == "4":
+            return StudentDiscount()
+        print("Please enter a number from 1 to 4.")
+
+
 def prompt_create_order(inventory: Inventory) -> None:
     print("Create Order")
     order_id = input("Order ID: ").strip().upper()
@@ -300,7 +321,7 @@ def prompt_create_order(inventory: Inventory) -> None:
         print("Error: Order ID cannot be empty. Entry rejected.")
         return
 
-    order = Order(order_id)
+    order = Order(order_id)  # no strategy given, so it starts with NoDiscount()
 
     while True:
         product_id = input("Product ID to add (or 'done' to finish): ").strip().upper()
@@ -314,8 +335,6 @@ def prompt_create_order(inventory: Inventory) -> None:
             continue
 
         quantity = get_valid_stock("Quantity: ")
-        if quantity is None:
-            continue
 
         try:
             order.add_order_line(product, quantity)
@@ -324,6 +343,9 @@ def prompt_create_order(inventory: Inventory) -> None:
             continue
 
         print(f"Added {quantity} x {product.get_name()} to the order.")
+
+    print(f"Subtotal so far: ${order.calculate_subtotal():.2f}")
+    order.set_discount(choose_discount())  # swap the strategy on this order
 
     print()
     order.display_order()
@@ -355,12 +377,12 @@ def main() -> None:
             prompt_create_order(inventory)
         elif option == "7":
             print("Saving inventory...")
-            save_inventory(inventory, suppliers)
-            print(f"Inventory saved successfully to {FILENAME}.")
+            if save_inventory(inventory, suppliers):
+                print(f"Inventory saved successfully to {FILENAME}.")
         elif option == "8":
             print("Saving inventory before exit...")
-            save_inventory(inventory, suppliers)
-            print("Inventory saved successfully.")
+            if save_inventory(inventory, suppliers):
+                print("Inventory saved successfully.")
             print("Thank you for using Inventory Management System.")
             print("Program terminated.")
             break
