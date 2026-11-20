@@ -67,3 +67,12 @@ class BulkDiscount(DiscountStrategy):
 
     def describe(self) -> str:
         return f"${self.__amount:.2f} off orders of ${self.__threshold:.2f} or more"
+
+class StudentDiscount(DiscountStrategy):
+    RATE: float = 0.05
+
+    def apply(self, total: float) -> float:
+        return total * (1 - StudentDiscount.RATE)
+
+    def describe(self) -> str:
+        return "Student discount (5% off)"
